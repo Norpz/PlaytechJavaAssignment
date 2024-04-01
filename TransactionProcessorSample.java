@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -69,14 +70,15 @@ public class TransactionProcessorSample {
         List<User> users = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))) {
             String line;
-            reader.readLine(); //To read first unneccesary line
+            reader.readLine(); //To read first unnecessary line
             while ((line = reader.readLine()) != null) {
-                // Parse CSV line and create User object
                 String[] parts = line.split(",");
-                User user = new User(parts[0], parts[1], Double.parseDouble(parts[2]), parts[3], Integer.parseInt(parts[4]),
-                        Double.parseDouble(parts[5]), Double.parseDouble(parts[6]), Double.parseDouble(parts[7]),
-                        Double.parseDouble(parts[8]));
-                users.add(user);
+                try {
+                    User user = new User(parts[0], parts[1], Double.parseDouble(parts[2]), parts[3], Integer.parseInt(parts[4]), Double.parseDouble(parts[5]), Double.parseDouble(parts[6]), Double.parseDouble(parts[7]), Double.parseDouble(parts[8]));
+                    users.add(user);
+                } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                    System.err.println("Error creating user: " + e.getMessage());
+                }
             }
         }
         return users;
@@ -86,11 +88,16 @@ public class TransactionProcessorSample {
         List<Transaction> transactions = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))){
             String line;
-            reader.readLine(); //To read first unneccesary line
+            reader.readLine(); //To read first unnecessary line
             while ((line = reader.readLine()) != null){
                 String[] parts = line.split(",");
-                Transaction transaction = new Transaction(parts[0], parts[1], parts[2], Double.parseDouble(parts[3]), parts[4], parts[5]);
-                transactions.add(transaction);
+                try {
+                    Transaction transaction = new Transaction(parts[0], parts[1], parts[2], Double.parseDouble(parts[3]), parts[4], parts[5]);
+                    transactions.add(transaction);
+                } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                    System.err.println("Error creating transaction: " + e.getMessage());
+                }
+
             }
         }
         return transactions;
@@ -100,11 +107,15 @@ public class TransactionProcessorSample {
         List<BinMapping> binMappings = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))){
             String line;
-            reader.readLine(); //To read first unneccesary line
+            reader.readLine(); //To read first unnecessary line
             while ((line = reader.readLine()) != null){
                 String[] parts = line.split(",");
-                BinMapping binMapping = new BinMapping(parts[0], parts[1], parts[2], parts[3], parts[4]);
-                binMappings.add(binMapping);
+                try {
+                    BinMapping binMapping = new BinMapping(parts[0], parts[1], parts[2], parts[3], parts[4]);
+                    binMappings.add(binMapping);
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    System.err.println("Error creating mapping: " + e.getMessage());
+                }
             }
         }
         return binMappings;
@@ -115,6 +126,11 @@ public class TransactionProcessorSample {
         List<String> allowedToWithdraw = new ArrayList<>();
         Map<String, String> usedPaymentAccounts = new HashMap<>();
 
+        Map<String, User> userMap = new HashMap<>();
+        for (User user : users){
+            userMap.put(user.userId, user);
+        }
+
         for (Transaction transaction : transactions){
             try{
                 //Check that there is not transaction with that ID in handled transactions
@@ -124,7 +140,7 @@ public class TransactionProcessorSample {
                 }
 
                 //Check if that user exists
-                Optional<User> user = findUser(users, transaction.userId);
+                Optional<User> user = Optional.ofNullable(userMap.get(transaction.userId));
                 if(user.isEmpty() || user.get().frozen == 1){
                     events.add(new Event(transaction.transactionId, Event.STATUS_DECLINED, "User " + transaction.userId + " not found in Users or is frozen"));
                     continue;
@@ -231,14 +247,6 @@ public class TransactionProcessorSample {
         return status;
     }
 
-    private static Optional<User> findUser(List<User> users, String userId) {
-        for (User user : users) {
-            if (user.userId.equals(userId)) {
-                return Optional.of(user);
-            }
-        }
-        return Optional.empty();
-    }
 
     public static String convertAlpha2ToAlpha3(String alpha2Code) {
         try {
@@ -256,8 +264,10 @@ public class TransactionProcessorSample {
             }
         }
         return true;
-    }
 
+        //And a fancy way :D
+        //return events.stream().map(Event::getTransactionId).noneMatch(transactionId -> transactionId.equals(transaction.getTransactionId()));
+    }
 
 
     private static boolean isValidIBAN(String IBAN){
@@ -278,12 +288,7 @@ public class TransactionProcessorSample {
         }
         BigInteger ibanAsBigInt = new BigInteger(convertedIBAN.toString());
 
-
-        if (ibanAsBigInt.mod(BigInteger.valueOf(97)).equals(BigInteger.ONE)) {
-            return true;
-        } else {
-            return false;
-        }
+        return ibanAsBigInt.mod(BigInteger.valueOf(97)).equals(BigInteger.ONE);
 
 
     }
@@ -291,9 +296,14 @@ public class TransactionProcessorSample {
     private static void writeBalances(final Path filePath, final List<User> users) throws IOException {
         try (final FileWriter writer = new FileWriter(filePath.toFile(), false)) {
             writer.append("USER_ID,BALANCE\n");
-            for (final var user : users) {
+            for (int i = 0; i < users.size(); i++){
+                User user = users.get(i);
                 String userBalance = String.valueOf(user.balance);
-                writer.append(user.userId).append(",").append(userBalance).append("\n");
+                String line = String.join(",", user.userId, userBalance);
+                if(i < users.size() - 1){
+                    line += "\n";
+                }
+                writer.append(line);
             }
         }
     }
@@ -301,8 +311,13 @@ public class TransactionProcessorSample {
     private static void writeEvents(final Path filePath, final List<Event> events) throws IOException {
         try (final FileWriter writer = new FileWriter(filePath.toFile(), false)) {
             writer.append("TRANSACTION_ID,STATUS,MESSAGE\n");
-            for (final var event : events) {
-                writer.append(event.transactionId).append(",").append(event.status).append(",").append(event.message).append("\n");
+            for (int i = 0; i < events.size(); i++){
+                Event event = events.get(i);
+                String line = String.join(",", event.transactionId, event.status, event.message);
+                if(i < events.size() - 1){
+                    line += "\n";
+                }
+                writer.append(line);
             }
         }
     }
