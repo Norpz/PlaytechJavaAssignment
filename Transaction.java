@@ -1,14 +1,16 @@
 package com.playtech.assignment;
 
+import java.math.BigDecimal;
+
 public class Transaction {
     String transactionId;
     String userId;
     String type;
-    double amount;
+    BigDecimal amount;
     String method;
     String accountNumber;
 
-    public Transaction(String transactionId, String userId, String type, double amount, String method, String accountNumber) {
+    public Transaction(String transactionId, String userId, String type, BigDecimal amount, String method, String accountNumber) {
         this.transactionId = transactionId;
         this.userId = userId;
         this.type = type;
@@ -42,11 +44,11 @@ public class Transaction {
         this.type = type;
     }
 
-    public double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(double amount) {
+    public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
 
